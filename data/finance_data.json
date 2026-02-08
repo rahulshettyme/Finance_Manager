@@ -1,0 +1,10 @@
+{
+  "transactions": [],
+  "incomeSources": [],
+  "expenseCategories": [
+    "Food",
+    "Cab",
+    "Bus"
+  ],
+  "expenseItems": []
+}
