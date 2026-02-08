@@ -4,7 +4,11 @@
   "expenseCategories": [
     "Food",
     "Cab",
-    "Bus"
+    "Bus",
+    "Shopping",
+    "Grocery",
+    "Cloths",
+    "Movie"
   ],
   "expenseItems": []
 }
