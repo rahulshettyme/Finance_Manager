@@ -31,6 +31,16 @@
                 <button id="nextMonthMonthly" class="nav-btn">▶</button>
             </div>
 
+            <!-- Action Buttons - Top Placement -->
+            <div class="action-buttons header-actions" style="margin-bottom: 2rem; z-index: 100; position: relative;">
+                <button id="addIncomeBtn" class="action-btn income-btn">
+                    <span class="btn-icon">+</span> Add Income
+                </button>
+                <button id="addExpenseBtn" class="action-btn expense-btn">
+                    <span class="btn-icon">+</span> Add Expense
+                </button>
+            </div>
+
             <!-- Summary Cards -->
             <div class="summary-cards">
                 <div class="summary-card income-card" id="incomeCard" style="cursor: pointer;"
@@ -59,7 +69,7 @@
             </div>
 
             <!-- Chart Section -->
-            <div class="chart-section">
+            <div id="chartSection" class="chart-section">
                 <h2>Expense Breakdown by Category</h2>
                 <div class="chart-container">
                     <canvas id="expenseChart"></canvas>
@@ -67,16 +77,6 @@
                 <div id="noDataMessage" class="no-data-message">
                     No expense data available for this month
                 </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="action-buttons">
-                <button id="addIncomeBtn" class="action-btn income-btn">
-                    <span class="btn-icon">+</span> Add Income
-                </button>
-                <button id="addExpenseBtn" class="action-btn expense-btn">
-                    <span class="btn-icon">+</span> Add Expense
-                </button>
             </div>
         </div>
 
@@ -107,9 +107,12 @@
                 </div>
                 <div class="form-group">
                     <label for="incomeSource">Source *</label>
-                    <input type="text" id="incomeSource" list="incomeSources" required
-                        placeholder="e.g., Salary, Freelance">
-                    <datalist id="incomeSources"></datalist>
+                    <div class="dropdown-wrapper">
+                        <input type="text" id="incomeSource" required autocomplete="off"
+                            placeholder="e.g., Salary, Freelance">
+                        <span class="dropdown-arrow">▼</span>
+                        <div id="incomeSourcesList" class="custom-dropdown-list"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="incomeDate">Date *</label>
@@ -138,14 +141,21 @@
                 </div>
                 <div class="form-group">
                     <label for="expenseItem">Item Name *</label>
-                    <input type="text" id="expenseItem" list="expenseItems" required placeholder="e.g., Momos, Biryani">
-                    <datalist id="expenseItems"></datalist>
+                    <div class="dropdown-wrapper">
+                        <input type="text" id="expenseItem" required autocomplete="off"
+                            placeholder="e.g., Momos, Biryani">
+                        <span class="dropdown-arrow">▼</span>
+                        <div id="expenseItemsList" class="custom-dropdown-list"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="expenseCategory">Category *</label>
-                    <input type="text" id="expenseCategory" list="expenseCategories" required
-                        placeholder="e.g., Food, Travel">
-                    <datalist id="expenseCategories"></datalist>
+                    <div class="dropdown-wrapper">
+                        <input type="text" id="expenseCategory" required autocomplete="off"
+                            placeholder="e.g., Food, Travel">
+                        <span class="dropdown-arrow">▼</span>
+                        <div id="expenseCategoriesList" class="custom-dropdown-list"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="expenseDate">Date *</label>
@@ -186,8 +196,15 @@
         </div>
     </div>
 
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="allowed-users.js"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="app.js?v=2.1"></script>
+    <script src="app.js?v=2.2"></script>
 </body>
 
 </html>

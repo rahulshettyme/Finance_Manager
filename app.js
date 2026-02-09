@@ -1,5 +1,5 @@
 // Finance Manager Application
-// Data Management and UI Logic
+// Data Management and UI Logic with Firebase
 
 // ==================== Data Storage ====================
 class FinanceManager {
@@ -11,74 +11,94 @@ class FinanceManager {
         this.currentMonth = new Date();
         this.chart = null;
         this.dataLoaded = false;
+        this.user = null;
+        this.unsubscribe = null;
     }
 
     async loadData() {
+        if (!this.user) {
+            console.log('User not logged in, cannot load data');
+            return;
+        }
+
         try {
-            const response = await fetch('/api/data');
-            if (!response.ok) {
-                if (response.status === 401) {
-                    window.location.href = '/';
-                    return;
+            const q = db.collection('users').doc(this.user.uid).collection('transactions').orderBy('date', 'desc');
+
+            // Listen for real-time updates
+            this.unsubscribe = q.onSnapshot((querySnapshot) => {
+                this.transactions = [];
+                const sources = new Set();
+                const categories = new Set();
+                const items = new Set();
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const transaction = {
+                        id: doc.id,
+                        ...data
+                    };
+                    this.transactions.push(transaction);
+
+                    // Collect unique values for dropdowns
+                    if (transaction.type === 'income') {
+                        if (transaction.category) sources.add(transaction.category);
+                    } else {
+                        if (transaction.category) categories.add(transaction.category);
+                        if (transaction.item) items.add(transaction.item);
+                    }
+                });
+
+                this.incomeSources = Array.from(sources).sort();
+                this.expenseCategories = Array.from(categories).sort();
+                this.expenseItems = Array.from(items).sort();
+
+                this.dataLoaded = true;
+
+                // Refresh UI
+                updateMonthlyView();
+                renderCalendar();
+
+                // Refresh custom dropdown options
+                if (document.getElementById('incomeModal').classList.contains('active')) {
+                    setupCustomDropdown('incomeSource', 'incomeSourcesList', this.incomeSources);
                 }
-                throw new Error(`Failed to load data (${response.status})`);
-            }
-            const data = await response.json();
-            this.transactions = data.transactions || [];
-            this.incomeSources = data.incomeSources || [];
-            this.expenseCategories = data.expenseCategories || [];
-            this.expenseItems = data.expenseItems || [];
-            this.dataLoaded = true;
-            return data;
+                if (document.getElementById('expenseModal').classList.contains('active')) {
+                    setupCustomDropdown('expenseItem', 'expenseItemsList', this.expenseItems);
+                    setupCustomDropdown('expenseCategory', 'expenseCategoriesList', this.expenseCategories);
+                }
+
+            }, (error) => {
+                console.error('Error listening to transactions:', error);
+
+                if (error.code === 'permission-denied') {
+                    // Ideally redirect to login, but auth state change handles that
+                    console.log("Permission denied. User might be logged out.");
+                }
+            });
+
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error setting up data listener:', error);
             throw error;
         }
     }
 
     async addTransaction(type, amount, category, date, description, item = '') {
+        if (!this.user) throw new Error('User not authenticated');
+
         const transaction = {
             type,
             amount: parseFloat(amount),
             category,
             item,
             date,
-            description
+            description,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp() // For consistent ordering if dates match
         };
 
         try {
-            const response = await fetch('/api/transactions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(transaction)
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to add transaction');
-            }
-
-            const result = await response.json();
-
-            // Update local data
-            this.transactions.push(result.transaction);
-
-            // Update dropdown lists locally
-            if (type === 'income') {
-                if (category && !this.incomeSources.includes(category)) {
-                    this.incomeSources.push(category);
-                }
-            } else if (type === 'expense') {
-                if (category && !this.expenseCategories.includes(category)) {
-                    this.expenseCategories.push(category);
-                }
-                if (item && !this.expenseItems.includes(item)) {
-                    this.expenseItems.push(item);
-                }
-            }
-
-            return result.transaction;
+            await db.collection('users').doc(this.user.uid).collection('transactions').add(transaction);
+            // Local data update is handled by onSnapshot listener
+            return true;
         } catch (error) {
             console.error('Error adding transaction:', error);
             throw error;
@@ -86,42 +106,17 @@ class FinanceManager {
     }
 
     async updateTransaction(id, transactionData) {
+        if (!this.user) throw new Error('User not authenticated');
+
         try {
-            const response = await fetch(`/api/transactions/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(transactionData)
-            });
+            const updateData = {
+                ...transactionData,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
 
-            if (!response.ok) {
-                throw new Error('Failed to update transaction');
-            }
-
-            const result = await response.json();
-
-            // Update local data
-            const index = this.transactions.findIndex(t => t.id === id);
-            if (index !== -1) {
-                this.transactions[index] = result.transaction;
-            }
-
-            // Update dropdown lists locally
-            if (transactionData.type === 'income') {
-                if (transactionData.category && !this.incomeSources.includes(transactionData.category)) {
-                    this.incomeSources.push(transactionData.category);
-                }
-            } else if (transactionData.type === 'expense') {
-                if (transactionData.category && !this.expenseCategories.includes(transactionData.category)) {
-                    this.expenseCategories.push(transactionData.category);
-                }
-                if (transactionData.item && !this.expenseItems.includes(transactionData.item)) {
-                    this.expenseItems.push(transactionData.item);
-                }
-            }
-
-            return result.transaction;
+            await db.collection('users').doc(this.user.uid).collection('transactions').doc(id).update(updateData);
+            // Local data update is handled by onSnapshot listener
+            return true;
         } catch (error) {
             console.error('Error updating transaction:', error);
             throw error;
@@ -129,17 +124,11 @@ class FinanceManager {
     }
 
     async deleteTransaction(id) {
+        if (!this.user) throw new Error('User not authenticated');
+
         try {
-            const response = await fetch(`/api/transactions/${id}`, {
-                method: 'DELETE'
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to delete transaction');
-            }
-
-            // Remove from local data
-            this.transactions = this.transactions.filter(t => t.id !== id);
+            await db.collection('users').doc(this.user.uid).collection('transactions').doc(id).delete();
+            // Local data update is handled by onSnapshot listener
             return true;
         } catch (error) {
             console.error('Error deleting transaction:', error);
@@ -197,17 +186,6 @@ class FinanceManager {
 const app = new FinanceManager();
 app.selectedMonth = new Date(); // Track selected month for monthly view
 
-// Load data from server
-async function initializeApp() {
-    try {
-        await app.loadData();
-        updateMonthlyView();
-        renderCalendar();
-    } catch (error) {
-        console.error('Failed to initialize app:', error);
-        alert(`Error: ${error.message}. Please refresh the page.`);
-    }
-}
 
 // ==================== UI Elements ====================
 const monthlyViewBtn = document.getElementById('monthlyViewBtn');
@@ -237,8 +215,9 @@ const calendarGrid = document.getElementById('calendarGrid');
 
 const expenseChartCanvas = document.getElementById('expenseChart');
 const noDataMessage = document.getElementById('noDataMessage');
+const chartSection = document.getElementById('chartSection');
 
-// Add logout button to dashboard
+// Add logout button to dashboard (Re-implementing logic with Firebase)
 const logoutBtn = document.createElement('button');
 logoutBtn.textContent = 'Logout';
 logoutBtn.style.cssText = `
@@ -256,8 +235,13 @@ logoutBtn.style.cssText = `
     z-index: 999;
 `;
 logoutBtn.addEventListener('click', async () => {
-    await fetch('/api/logout');
-    window.location.href = '/';
+    try {
+        await auth.signOut();
+        // Redirect handled by onAuthStateChanged
+    } catch (error) {
+        console.error('Logout error', error);
+        alert('Failed to logout');
+    }
 });
 document.body.appendChild(logoutBtn);
 
@@ -296,14 +280,14 @@ function resetForm(form, type) {
 addIncomeBtn.addEventListener('click', () => {
     resetForm(incomeForm, 'income');
     openModal(incomeModal);
-    populateDropdown('incomeSources', app.incomeSources);
+    setupCustomDropdown('incomeSource', 'incomeSourcesList', app.incomeSources);
 });
 
 addExpenseBtn.addEventListener('click', () => {
     resetForm(expenseForm, 'expense');
     openModal(expenseModal);
-    populateDropdown('expenseCategories', app.expenseCategories);
-    populateDropdown('expenseItems', app.expenseItems);
+    setupCustomDropdown('expenseItem', 'expenseItemsList', app.expenseItems);
+    setupCustomDropdown('expenseCategory', 'expenseCategoriesList', app.expenseCategories);
 });
 
 // ==================== Modal Management ====================
@@ -322,7 +306,7 @@ function openEditModal(transaction) {
         submitBtn.textContent = 'Update Income';
 
         openModal(incomeModal);
-        populateDropdown('incomeSources', app.incomeSources);
+        setupCustomDropdown('incomeSource', 'incomeSourcesList', app.incomeSources);
     } else {
         expenseForm.dataset.editId = transaction.id;
         document.getElementById('expenseAmount').value = transaction.amount;
@@ -335,8 +319,8 @@ function openEditModal(transaction) {
         submitBtn.textContent = 'Update Expense';
 
         openModal(expenseModal);
-        populateDropdown('expenseCategories', app.expenseCategories);
-        populateDropdown('expenseItems', app.expenseItems);
+        setupCustomDropdown('expenseItem', 'expenseItemsList', app.expenseItems);
+        setupCustomDropdown('expenseCategory', 'expenseCategoriesList', app.expenseCategories);
     }
 }
 
@@ -361,17 +345,70 @@ function setDefaultDate(inputId) {
     document.getElementById(inputId).value = today;
 }
 
-function populateDropdown(datalistId, options) {
-    const datalist = document.getElementById(datalistId);
-    datalist.innerHTML = '';
-    options.forEach(option => {
-        const optionEl = document.createElement('option');
-        optionEl.value = option;
-        datalist.appendChild(optionEl);
+function setupCustomDropdown(inputId, listId, options) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    if (!input || !list) return;
+
+    // Filter and show all options initially on focus
+    const showAllOptions = () => {
+        renderOptions(options);
+        list.classList.add('active');
+    };
+
+    input.addEventListener('focus', showAllOptions);
+    input.addEventListener('click', showAllOptions);
+
+    input.addEventListener('input', (e) => {
+        const value = e.target.value.toLowerCase();
+        const filtered = options.filter(opt => opt.toLowerCase().includes(value));
+        renderOptions(filtered);
+        list.classList.add('active');
+    });
+
+    // Handle selection and closing
+    function renderOptions(opts) {
+        list.innerHTML = '';
+        if (opts.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'dropdown-item no-results';
+            noResults.textContent = 'No suggestions found (type to add new)';
+            list.appendChild(noResults);
+            return;
+        }
+
+        opts.forEach(opt => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = opt;
+            item.addEventListener('mousedown', (e) => {
+                // Use mousedown instead of click to fire before blur
+                e.preventDefault();
+                input.value = opt;
+                list.classList.remove('active');
+                // Trigger input event to ensure any validation fires
+                input.dispatchEvent(new Event('input'));
+            });
+            list.appendChild(item);
+        });
+    }
+
+    // Close when clicking outside
+    document.addEventListener('mousedown', (e) => {
+        if (!input.contains(e.target) && !list.contains(e.target)) {
+            list.classList.remove('active');
+        }
+    });
+
+    // Handle keyboard navigation (Optional basic version)
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            list.classList.remove('active');
+            input.blur();
+        }
     });
 }
 
-// ==================== Form Submissions ====================
 incomeForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -381,9 +418,15 @@ incomeForm.addEventListener('submit', async (e) => {
     const description = document.getElementById('incomeDescription').value;
     const editId = incomeForm.dataset.editId;
 
+    const submitBtn = incomeForm.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.textContent;
+
     try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+
         if (editId) {
-            await app.updateTransaction(parseInt(editId), {
+            await app.updateTransaction(editId, {
                 type: 'income',
                 amount: parseFloat(amount),
                 category: source,
@@ -398,17 +441,11 @@ incomeForm.addEventListener('submit', async (e) => {
 
         incomeForm.reset();
         closeModal(incomeModal);
-        updateMonthlyView();
-        renderCalendar();
-
-        // If we were in day details view, refresh it
-        if (dayDetailsModal.classList.contains('active')) {
-            const d = new Date(date);
-            const updatedTransactions = app.getDailyTransactions(d.getFullYear(), d.getMonth(), d.getDate());
-            showDayDetails(d.getDate(), d.getMonth(), d.getFullYear(), updatedTransactions);
-        }
     } catch (error) {
         showNotification(editId ? 'Failed to update income.' : 'Failed to add income.', 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
     }
 });
 
@@ -422,9 +459,15 @@ expenseForm.addEventListener('submit', async (e) => {
     const description = document.getElementById('expenseDescription').value;
     const editId = expenseForm.dataset.editId;
 
+    const submitBtn = expenseForm.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.textContent;
+
     try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+
         if (editId) {
-            await app.updateTransaction(parseInt(editId), {
+            await app.updateTransaction(editId, {
                 type: 'expense',
                 amount: parseFloat(amount),
                 category,
@@ -440,17 +483,11 @@ expenseForm.addEventListener('submit', async (e) => {
 
         expenseForm.reset();
         closeModal(expenseModal);
-        updateMonthlyView();
-        renderCalendar();
-
-        // If we were in day details view, refresh it
-        if (dayDetailsModal.classList.contains('active')) {
-            const d = new Date(date);
-            const updatedTransactions = app.getDailyTransactions(d.getFullYear(), d.getMonth(), d.getDate());
-            showDayDetails(d.getDate(), d.getMonth(), d.getFullYear(), updatedTransactions);
-        }
     } catch (error) {
         showNotification(editId ? 'Failed to update expense.' : 'Failed to add expense.', 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
     }
 });
 
@@ -500,11 +537,11 @@ function updateExpenseChart(year, month) {
             app.chart.destroy();
             app.chart = null;
         }
-        expenseChartCanvas.style.display = 'none';
-        noDataMessage.style.display = 'block';
+        chartSection.style.display = 'none'; // Hide whole section
         return;
     }
 
+    chartSection.style.display = 'block'; // Show section
     expenseChartCanvas.style.display = 'block';
     noDataMessage.style.display = 'none';
 
@@ -708,6 +745,11 @@ function showDayDetails(day, month, year, transactions) {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
 
+    // Store the date on the modal for refreshing after deletion
+    dayDetailsModal.dataset.day = day;
+    dayDetailsModal.dataset.month = month;
+    dayDetailsModal.dataset.year = year;
+
     document.getElementById('dayDetailsTitle').textContent =
         `Transactions - ${monthNames[month]} ${day}, ${year}`;
 
@@ -745,16 +787,25 @@ function showDayDetails(day, month, year, transactions) {
                 e.stopPropagation();
 
                 if (confirm('Are you sure you want to delete this transaction?')) {
-                    const id = parseInt(btn.getAttribute('data-id'));
+                    const id = btn.getAttribute('data-id'); // ID is string in Firestore
                     try {
                         await app.deleteTransaction(id);
 
-                        // Refresh data
-                        const updatedTransactions = app.getDailyTransactions(year, month, day);
-                        showDayDetails(day, month, year, updatedTransactions);
-                        updateMonthlyView();
-                        renderCalendar();
+                        // Success notification
                         showNotification('Transaction deleted successfully', 'success');
+
+                        // Refresh modal content immediately
+                        const { day, month, year } = dayDetailsModal.dataset;
+                        const d = parseInt(day);
+                        const m = parseInt(month);
+                        const y = parseInt(year);
+
+                        // Fetch latest transactions for that day
+                        const updatedTransactions = app.getDailyTransactions(y, m, d);
+
+                        // Self-refresh
+                        showDayDetails(d, m, y, updatedTransactions);
+
                     } catch (error) {
                         showNotification('Failed to delete transaction', 'error');
                     }
@@ -766,7 +817,7 @@ function showDayDetails(day, month, year, transactions) {
         document.querySelectorAll('.edit-transaction-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const id = parseInt(btn.getAttribute('data-id'));
+                const id = btn.getAttribute('data-id');
                 const transaction = transactions.find(t => t.id === id);
                 if (transaction) {
                     openEditModal(transaction);
@@ -800,12 +851,14 @@ function showBreakdown(type) {
     document.getElementById('breakdownTitle').textContent =
         `${type === 'income' ? 'Income' : 'Expense'} Breakdown - ${monthNames[month]} ${year}`;
 
+    const content = document.getElementById('breakdownContent');
+    content.innerHTML = '';
+
     const transactions = app.getMonthlyTransactions(year, month)
         .filter(t => t.type === type);
 
     if (transactions.length === 0) {
-        document.getElementById('breakdownContent').innerHTML =
-            `<p style="text-align: center; color: #b8b8d1; padding: 2rem;">No ${type} data for this month</p>`;
+        content.innerHTML = '<p style="text-align: center; color: #666;">No data available</p>';
         openModal(breakdownModal);
         return;
     }
@@ -873,24 +926,88 @@ function showBreakdown(type) {
         </div>
     `;
 
-    document.getElementById('breakdownContent').innerHTML = tableHTML;
+    content.innerHTML = tableHTML;
     openModal(breakdownModal);
-}
-
-// ==================== Initialize Application ====================
-// Load data when page loads
-initializeApp();
-
-// ==================== Notifications ====================
-function showNotification(message, type) {
-    // Simple console notification for now
-    // Could be enhanced with a toast notification system
-    console.log(`${type.toUpperCase()}: ${message}`);
 }
 
 // ==================== Initialize on Load ====================
 document.addEventListener('DOMContentLoaded', () => {
-    updateMonthlyView();
-    setDefaultDate('incomeDate');
-    setDefaultDate('expenseDate');
+    // Set default dates
+    const today = new Date().toISOString().split('T')[0];
+    const incomeDate = document.getElementById('incomeDate');
+    const expenseDate = document.getElementById('expenseDate');
+    if (incomeDate) incomeDate.value = today;
+    if (expenseDate) expenseDate.value = today;
 });
+
+// ==================== Authentication State ====================
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        console.log('User signed in:', user.email);
+
+        // Whitelist check
+        if (typeof allowedUsers !== 'undefined' && !allowedUsers.includes(user.email.toLowerCase())) {
+            console.log('Unauthorized access attempt:', user.email);
+            auth.signOut().then(() => {
+                window.location.href = 'login.html?error=unauthorized';
+            });
+            return;
+        }
+
+        app.user = user;
+        app.loadData();
+    } else {
+        console.log('User signed out');
+        app.user = null;
+        if (app.unsubscribe) {
+            app.unsubscribe();
+            app.unsubscribe = null;
+        }
+        window.location.href = 'login.html';
+    }
+});
+
+// ==================== Notifications ====================
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        padding: 1rem 2rem;
+        border-radius: 12px;
+        color: white;
+        font-weight: 600;
+        z-index: 9999;
+        animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        background: ${type === 'success' ? 'var(--income-gradient)' : 'var(--expense-gradient)'};
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    `;
+
+    const icon = type === 'success' ? '✅' : '⚠️';
+    notification.innerHTML = `<span>${icon}</span> ${message}`;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+// Add common animations to document if they don't exist
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+`;
+document.head.appendChild(style);

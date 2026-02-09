@@ -532,6 +532,134 @@ body {
     box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
 }
 
+/* Custom Dropdowns */
+.dropdown-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.dropdown-arrow {
+    position: absolute;
+    right: 1.2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    pointer-events: none;
+    transition: transform 0.3s ease;
+}
+
+.dropdown-wrapper:focus-within .dropdown-arrow {
+    transform: translateY(-50%) rotate(180deg);
+    color: var(--primary-color);
+}
+
+.custom-dropdown-list {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    width: 100%;
+    max-height: 200px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.custom-dropdown-list.active {
+    display: block;
+}
+
+.dropdown-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: #1e293b;
+    /* Dark slate for high contrast on white */
+    transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.dropdown-item:hover {
+    background: var(--balance-primary);
+    color: white !important;
+    padding-left: 20px;
+}
+
+.dropdown-item.no-results {
+    color: #475569;
+    /* Much darker grey for clear visibility */
+    font-style: italic;
+    cursor: default;
+}
+
+.dropdown-item.no-results:hover {
+    background: transparent !important;
+    padding-left: 16px;
+    color: #475569 !important;
+    /* Keep consistent dark color on hover */
+}
+
+/* Dark mode support for dropdowns */
+@media (prefers-color-scheme: dark) {
+    .custom-dropdown-list {
+        background: rgba(30, 30, 50, 0.95);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dropdown-item {
+        color: #e2e8f0;
+        border-bottom-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .dropdown-item:hover {
+        background: rgba(59, 130, 246, 0.3);
+    }
+}
+
+/* Modal specific contrast */
+.modal-content .custom-dropdown-list {
+    background: #ffffff;
+    /* High contrast for light theme modals */
+}
+
+.modal-content.expense-modal .custom-dropdown-list,
+.modal-content.income-modal .custom-dropdown-list {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+
+    .modal-content.expense-modal .custom-dropdown-list,
+    .modal-content.income-modal .custom-dropdown-list {
+        background: #1e1e32;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+}
+
 .expense-submit {
     background: var(--expense-gradient);
     color: white;
