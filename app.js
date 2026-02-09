@@ -949,7 +949,7 @@ auth.onAuthStateChanged((user) => {
         if (typeof allowedUsers !== 'undefined' && !allowedUsers.includes(user.email.toLowerCase())) {
             console.log('Unauthorized access attempt:', user.email);
             auth.signOut().then(() => {
-                window.location.href = 'login.html?error=unauthorized';
+                window.location.href = 'index.html?error=unauthorized';
             });
             return;
         }
@@ -963,7 +963,7 @@ auth.onAuthStateChanged((user) => {
             app.unsubscribe();
             app.unsubscribe = null;
         }
-        window.location.href = 'login.html';
+        window.location.href = 'index.html';
     }
 });
 
