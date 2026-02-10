@@ -196,6 +196,8 @@ const calendarView = document.getElementById('calendarView'); // Kept original c
 const totalIncomeEl = document.getElementById('totalIncome');
 const totalExpenseEl = document.getElementById('totalExpense');
 const netBalanceEl = document.getElementById('netBalance');
+const controllableExpenseEl = document.getElementById('controllableExpense');
+const nonControllableExpenseEl = document.getElementById('nonControllableExpense');
 
 const addIncomeBtn = document.getElementById('addIncomeBtn');
 const addExpenseBtn = document.getElementById('addExpenseBtn');
@@ -204,6 +206,7 @@ const incomeModal = document.getElementById('incomeModal');
 const expenseModal = document.getElementById('expenseModal');
 const dayDetailsModal = document.getElementById('dayDetailsModal');
 const breakdownModal = document.getElementById('breakdownModal');
+const categoryDetailsModal = document.getElementById('categoryDetailsModal');
 
 const incomeForm = document.getElementById('incomeForm');
 const expenseForm = document.getElementById('expenseForm');
@@ -213,7 +216,7 @@ const nextMonthBtn = document.getElementById('nextMonth');
 const currentMonthEl = document.getElementById('currentMonth');
 const calendarGrid = document.getElementById('calendarGrid');
 
-const expenseChartCanvas = document.getElementById('expenseChart');
+const expenseSummaryContainer = document.getElementById('expenseSummaryContainer');
 const noDataMessage = document.getElementById('noDataMessage');
 const chartSection = document.getElementById('chartSection');
 
@@ -522,98 +525,84 @@ function updateMonthlyView() {
     totalExpenseEl.textContent = `₹${totals.expense.toFixed(2)}`;
     netBalanceEl.textContent = `₹${totals.balance.toFixed(2)}`;
 
-    // Update chart
-    updateExpenseChart(year, month);
+    // Calculate Controllable vs Non-Controllable
+    const monthlyTransactions = app.getMonthlyTransactions(year, month);
+    const expenses = monthlyTransactions.filter(t => t.type === 'expense');
+
+    let controllable = 0;
+    let nonControllable = 0;
+
+    expenses.forEach(t => {
+        const cat = t.category.trim().toLowerCase();
+        const item = (t.item || '').trim().toLowerCase();
+        const isNonControllable = cat === 'emi' || cat === 'emis' || cat === 'investment' || cat === 'investments' || (cat === 'home' && item === 'home');
+
+        if (isNonControllable) {
+            nonControllable += t.amount;
+        } else {
+            controllable += t.amount;
+        }
+    });
+
+    controllableExpenseEl.textContent = `₹${controllable.toFixed(2)}`;
+    nonControllableExpenseEl.textContent = `₹${nonControllable.toFixed(2)}`;
+
+    // Update summary table
+    updateExpenseSummary(year, month);
 }
 
-function updateExpenseChart(year, month) {
+function updateExpenseSummary(year, month) {
     const categoryData = app.getExpensesByCategory(year, month);
     const categories = Object.keys(categoryData);
-    const amounts = Object.values(categoryData);
 
     if (categories.length === 0) {
-        // No data
-        if (app.chart) {
-            app.chart.destroy();
-            app.chart = null;
-        }
-        chartSection.style.display = 'none'; // Hide whole section
+        chartSection.style.display = 'none';
         return;
     }
 
-    chartSection.style.display = 'block'; // Show section
-    expenseChartCanvas.style.display = 'block';
+    chartSection.style.display = 'block';
     noDataMessage.style.display = 'none';
 
-    // Generate vibrant colors for categories
+    // Sort categories by amount descending
+    const sortedCategories = categories.sort((a, b) => categoryData[b] - categoryData[a]);
+    const total = Object.values(categoryData).reduce((a, b) => a + b, 0);
     const colors = generateColors(categories.length);
 
-    if (app.chart) {
-        app.chart.destroy();
-    }
+    let tableHTML = `
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th style="text-align: right;">Amount</th>
+                    <th style="text-align: right;">%</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
 
-    const ctx = expenseChartCanvas.getContext('2d');
-    app.chart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: categories,
-            datasets: [{
-                data: amounts,
-                backgroundColor: colors,
-                borderColor: '#1a1a2e',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#1a1a2e',
-                        font: {
-                            size: 14,
-                            family: 'Inter',
-                            weight: '600'
-                        },
-                        padding: 20,
-                        generateLabels: function (chart) {
-                            const data = chart.data;
-                            if (data.labels.length && data.datasets.length) {
-                                const dataset = data.datasets[0];
-                                const total = dataset.data.reduce((a, b) => a + b, 0);
+    sortedCategories.forEach((cat, i) => {
+        const amount = categoryData[cat];
+        const percentage = ((amount / total) * 100).toFixed(1);
+        const color = colors[i % colors.length];
 
-                                return data.labels.map((label, i) => {
-                                    const value = dataset.data[i];
-                                    const percentage = ((value / total) * 100).toFixed(1);
-
-                                    return {
-                                        text: `${label}: ₹${value.toFixed(0)} (${percentage}%)`,
-                                        fillStyle: dataset.backgroundColor[i],
-                                        hidden: false,
-                                        index: i
-                                    };
-                                });
-                            }
-                            return [];
-                        }
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function (context) {
-                            const label = context.label || '';
-                            const value = context.parsed || 0;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((value / total) * 100).toFixed(1);
-                            return `${label}: ₹${value.toFixed(2)} (${percentage}%)`;
-                        }
-                    }
-                }
-            }
-        }
+        tableHTML += `
+            <tr>
+                <td>
+                    <span class="category-dot" style="background-color: ${color}"></span>
+                    ${cat}
+                </td>
+                <td style="text-align: right; font-weight: 600;">₹${amount.toFixed(0)}</td>
+                <td style="text-align: right; color: var(--text-secondary); font-size: 0.85rem;">${percentage}%</td>
+            </tr>
+        `;
     });
+
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+
+    expenseSummaryContainer.innerHTML = tableHTML;
 }
 
 function generateColors(count) {
@@ -826,36 +815,81 @@ function showDayDetails(day, month, year, transactions) {
         });
     }
 
+    // Add "Add Expense" button to modal footer
+    const footer = document.createElement('div');
+    footer.className = 'modal-footer';
+
+    const addEBtn = document.createElement('button');
+    addEBtn.className = 'action-btn expense-btn add-btn-small';
+    addEBtn.innerHTML = '<span class="btn-icon">+</span> Add Expense';
+    addEBtn.addEventListener('click', () => {
+        resetForm(expenseForm, 'expense');
+
+        // Pre-fill date from day view
+        const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        document.getElementById('expenseDate').value = dateStr;
+
+        openModal(expenseModal);
+        setupCustomDropdown('expenseItem', 'expenseItemsList', app.expenseItems);
+        setupCustomDropdown('expenseCategory', 'expenseCategoriesList', app.expenseCategories);
+    });
+
+    footer.appendChild(addEBtn);
+    content.appendChild(footer);
+
     openModal(dayDetailsModal);
 }
 
 // ==================== Breakdown Tables ====================
 // Breakdown modal event listeners
 const incomeCard = document.getElementById('incomeCard');
-const expenseCard = document.getElementById('expenseCard');
+const controllableCard = document.getElementById('controllableCard');
+const nonControllableCard = document.getElementById('nonControllableCard');
 
 incomeCard.addEventListener('click', () => {
     showBreakdown('income');
 });
 
-expenseCard.addEventListener('click', () => {
-    showBreakdown('expense');
-});
+if (controllableCard) {
+    controllableCard.addEventListener('click', () => {
+        showBreakdown('expense', 'controllable');
+    });
+}
 
-function showBreakdown(type) {
+if (nonControllableCard) {
+    nonControllableCard.addEventListener('click', () => {
+        showBreakdown('expense', 'non-controllable');
+    });
+}
+
+function showBreakdown(type, group = null) {
     const year = app.selectedMonth.getFullYear();
     const month = app.selectedMonth.getMonth();
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
 
+    let titleText = `${type === 'income' ? 'Income' : 'Expense'} Breakdown`;
+    if (group) {
+        titleText = `${group.charAt(0).toUpperCase() + group.slice(1)} Expenses`;
+    }
+
     document.getElementById('breakdownTitle').textContent =
-        `${type === 'income' ? 'Income' : 'Expense'} Breakdown - ${monthNames[month]} ${year}`;
+        `${titleText} - ${monthNames[month]} ${year}`;
 
     const content = document.getElementById('breakdownContent');
     content.innerHTML = '';
 
-    const transactions = app.getMonthlyTransactions(year, month)
+    let transactions = app.getMonthlyTransactions(year, month)
         .filter(t => t.type === type);
+
+    if (group) {
+        transactions = transactions.filter(t => {
+            const cat = t.category.trim().toLowerCase();
+            const item = (t.item || '').trim().toLowerCase();
+            const isNonControllable = (cat === 'emi' || cat === 'emis' || cat === 'investment' || cat === 'investments' || (cat === 'home' && item === 'home'));
+            return group === 'non-controllable' ? isNonControllable : !isNonControllable;
+        });
+    }
 
     if (transactions.length === 0) {
         content.innerHTML = '<p style="text-align: center; color: #666;">No data available</p>';
@@ -883,13 +917,65 @@ function showBreakdown(type) {
     // Calculate grand total
     const grandTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
 
-    // Generate table HTML
+    // Generate table DOM instead of string for easier click handling
+    const table = document.createElement('table');
+    table.className = 'breakdown-table';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th style="text-align: right;">Amount</th>
+                <th style="text-align: right;">% of Group</th>
+            </tr>
+        </thead>
+    `;
+
+    const tbody = document.createElement('tbody');
+
+    sortedCategories.forEach(([category, items]) => {
+        const catTotal = items.reduce((sum, t) => sum + t.amount, 0);
+        const percentage = ((catTotal / grandTotal) * 100).toFixed(1);
+
+        const row = document.createElement('tr');
+        row.className = 'clickable';
+        row.innerHTML = `
+            <td class="breakdown-category">${category}</td>
+            <td class="breakdown-amount">₹${catTotal.toFixed(2)}</td>
+            <td class="breakdown-percentage">${percentage}%</td>
+        `;
+        row.addEventListener('click', () => {
+            showCategoryDetails(category, items);
+        });
+        tbody.appendChild(row);
+    });
+
+    table.appendChild(tbody);
+    content.appendChild(table);
+
+    const summary = document.createElement('div');
+    summary.style.cssText = 'margin-top: 1rem; padding: 1rem; background: var(--card-bg); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-weight: 600;';
+    summary.innerHTML = `
+        <span style="color: var(--text-secondary);">Total Transactions: ${transactions.length}</span>
+        <span style="font-size: 1.2rem; color: var(--text-primary);">Total Amount: ₹${grandTotal.toFixed(2)}</span>
+    `;
+    content.appendChild(summary);
+
+    openModal(breakdownModal);
+}
+
+function showCategoryDetails(category, items) {
+    document.getElementById('categoryDetailsTitle').textContent = `${category} Details`;
+    const content = document.getElementById('categoryDetailsContent');
+    content.innerHTML = '';
+
+    // Sort items by date descending
+    items.sort((a, b) => new Date(b.date) - new Date(a.date));
+
     let tableHTML = `
         <table class="breakdown-table">
             <thead>
                 <tr>
                     <th>Item / Source</th>
-                    <th>Category</th>
                     <th style="text-align: center;">Date</th>
                     <th style="text-align: right;">Amount</th>
                 </tr>
@@ -897,37 +983,30 @@ function showBreakdown(type) {
             <tbody>
     `;
 
-    sortedCategories.forEach(([category, items]) => {
-        // Sort items within category by amount (descending)
-        items.sort((a, b) => b.amount - a.amount);
+    items.forEach(t => {
+        const itemName = t.type === 'expense' && t.item ? t.item : t.category;
+        const dateObj = new Date(t.date);
+        const dateStr = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 
-        items.forEach(t => {
-            const itemName = type === 'expense' && t.item ? t.item : t.category;
-            const dateObj = new Date(t.date);
-            const dateStr = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-
-            tableHTML += `
-                <tr>
-                    <td class="breakdown-category">${itemName}</td>
-                    <td style="color: var(--text-secondary);">${category}</td>
-                    <td class="breakdown-count">${dateStr}</td>
-                    <td class="breakdown-amount">₹${t.amount.toFixed(2)}</td>
-                </tr>
-            `;
-        });
+        tableHTML += `
+            <tr>
+                <td class="breakdown-category">${itemName}</td>
+                <td class="breakdown-count">${dateStr}</td>
+                <td class="breakdown-amount">₹${t.amount.toFixed(2)}</td>
+            </tr>
+        `;
     });
 
     tableHTML += `
             </tbody>
         </table>
-        <div style="margin-top: 1rem; padding: 1rem; background: var(--card-bg); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-weight: 600;">
-            <span style="color: var(--text-secondary);">Total Transactions: ${transactions.length}</span>
-            <span style="font-size: 1.2rem; color: var(--text-primary);">Total Amount: ₹${grandTotal.toFixed(2)}</span>
+        <div style="margin-top: 1rem; padding: 1rem; background: var(--card-bg); border-radius: 8px; text-align: right; font-weight: 600;">
+            <span style="font-size: 1.2rem; color: var(--text-primary);">Total: ₹${items.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}</span>
         </div>
     `;
 
     content.innerHTML = tableHTML;
-    openModal(breakdownModal);
+    openModal(categoryDetailsModal);
 }
 
 // ==================== Initialize on Load ====================

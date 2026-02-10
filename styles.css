@@ -234,7 +234,7 @@ body {
     left: 0;
     right: 0;
     height: 140px;
-    background: linear-gradient(to top, rgba(240, 240, 245, 0.98) 0%, transparent 100%);
+    background: linear-gradient(to top, var(--primary-bg) 0%, transparent 100%);
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     pointer-events: none;
     z-index: 1;
@@ -857,10 +857,11 @@ body {
 }
 
 .breakdown-table thead {
-    background: var(--card-bg);
+    background: var(--secondary-bg);
+    /* Use a solid background */
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 20;
 }
 
 .breakdown-table th {
@@ -903,6 +904,101 @@ body {
     color: var(--text-secondary);
     font-size: 0.9rem;
     text-align: center;
+}
+
+/* Summary Table Styles */
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--spacing-md);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.summary-table th,
+.summary-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.summary-table th {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.summary-table tr:last-child td {
+    border-bottom: none;
+}
+
+.category-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+
+/* Categorization Badges */
+.expense-split {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.split-card {
+    flex: 1;
+    background: var(--card-bg);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all var(--transition-normal);
+}
+
+.split-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.split-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.split-amount {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.controllable .split-amount {
+    color: var(--accent-blue);
+}
+
+.non-controllable .split-amount {
+    color: var(--accent-purple);
+}
+
+/* Day View Action Button */
+.modal-footer {
+    margin-top: var(--spacing-lg);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.add-btn-small {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    min-width: unset;
 }
 
 /* Scrollbar Styling */

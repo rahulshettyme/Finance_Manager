@@ -51,8 +51,7 @@
                         <p class="amount" id="totalIncome">₹0.00</p>
                     </div>
                 </div>
-                <div class="summary-card expense-card" id="expenseCard" style="cursor: pointer;"
-                    title="Click to view expense breakdown">
+                <div class="summary-card expense-card" id="expenseCard">
                     <div class="card-icon">📉</div>
                     <div class="card-content">
                         <h3>Total Expense</h3>
@@ -68,11 +67,25 @@
                 </div>
             </div>
 
+            <!-- Expense Split -->
+            <div id="expenseSplit" class="expense-split">
+                <div class="split-card controllable" id="controllableCard" style="cursor: pointer;"
+                    title="Click to view controllable expenses">
+                    <span class="split-label">Controllable</span>
+                    <p class="split-amount" id="controllableExpense">₹0.00</p>
+                </div>
+                <div class="split-card non-controllable" id="nonControllableCard" style="cursor: pointer;"
+                    title="Click to view non-controllable expenses">
+                    <span class="split-label">Non-Controllable</span>
+                    <p class="split-amount" id="nonControllableExpense">₹0.00</p>
+                </div>
+            </div>
+
             <!-- Chart Section -->
             <div id="chartSection" class="chart-section">
-                <h2>Expense Breakdown by Category</h2>
-                <div class="chart-container">
-                    <canvas id="expenseChart"></canvas>
+                <h2>Expense Summary</h2>
+                <div id="expenseSummaryContainer" class="summary-container">
+                    <!-- Table will be generated here -->
                 </div>
                 <div id="noDataMessage" class="no-data-message">
                     No expense data available for this month
@@ -192,6 +205,19 @@
             </div>
             <div id="breakdownContent" class="breakdown-content">
                 <!-- Breakdown table will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Details Modal -->
+    <div id="categoryDetailsModal" class="modal">
+        <div class="modal-content day-details-modal">
+            <div class="modal-header">
+                <h2 id="categoryDetailsTitle">Category Details</h2>
+                <span class="close" data-modal="categoryDetailsModal">&times;</span>
+            </div>
+            <div id="categoryDetailsContent" class="breakdown-content">
+                <!-- Category details table will be populated here -->
             </div>
         </div>
     </div>
